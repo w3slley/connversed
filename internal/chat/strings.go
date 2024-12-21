@@ -12,12 +12,11 @@ const (
 )
 
 const (
-	LOBBY_UI_COMMAND           = "l - go to lobby"
-	JOIN_ROOM_UI_COMMAND       = "j - join room"
-	CREATE_ROOM_UI_COMMAND     = "c - create room"
-	SEND_MESSAGE_UI_COMMAND    = "s - send message"
-	CHANGE_USERNAME_UI_COMMAND = "u - change username"
-	QUIT_UI_COMMAND            = "q - quit"
+	LOBBY_UI_COMMAND        = "l - go to lobby"
+	JOIN_ROOM_UI_COMMAND    = "j - join room"
+	CREATE_ROOM_UI_COMMAND  = "c - create room"
+	SEND_MESSAGE_UI_COMMAND = "s - send message"
+	QUIT_UI_COMMAND         = "q - quit"
 )
 
 const (

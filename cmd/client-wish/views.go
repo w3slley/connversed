@@ -14,7 +14,6 @@ func welcomeView(m model) string {
 		chat.JOIN_ROOM_UI_COMMAND,
 		chat.CREATE_ROOM_UI_COMMAND,
 		chat.SEND_MESSAGE_UI_COMMAND,
-		chat.CHANGE_USERNAME_UI_COMMAND,
 		chat.QUIT_UI_COMMAND,
 	}
 	titleStyle := lipgloss.NewStyle().
@@ -34,11 +33,12 @@ func welcomeView(m model) string {
 		Foreground(lipgloss.Color("8")).
 		Padding(1, 1)
 
-	connverseAscii := `                                              
-  ___ ___  _ __  _ ____   _____ _ __ ___  ___ 
- / __/ _ \| '_ \| '_ \ \ / / _ \ '__/ __|/ _ \
-| (_| (_) | | | | | | \ V /  __/ |  \__ \  __/
- \___\___/|_| |_|_| |_|\_/ \___|_|  |___/\___|
+	connverseAscii := `
+                                                  _
+   ___ ___  _ __  _ ____   _____ _ __ ___  ___  __| |
+  / __/ _ \| '_ \| '_ \ \ / / _ \ '__/ __|/ _ \/ _' |
+ | (_| (_) | | | | | | \ V /  __/ |  \__ \  __/ (_| |
+  \___\___/|_| |_|_| |_|\_/ \___|_|  |___/\___|\__,_|
   `
 	title := titleStyle.Render(connverseAscii)
 	welcome := welcomeStyle.Render(fmt.Sprintf(chat.WELCOME, m.session.User()))
@@ -71,7 +71,6 @@ func lobbyView(m model) string {
 		chat.JOIN_ROOM_UI_COMMAND,
 		chat.CREATE_ROOM_UI_COMMAND,
 		chat.SEND_MESSAGE_UI_COMMAND,
-		chat.CHANGE_USERNAME_UI_COMMAND,
 		chat.QUIT_UI_COMMAND,
 	}
 	return commands[0] + m.session.User()
