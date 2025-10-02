@@ -1,7 +1,7 @@
 package main
 
 import (
-	"connverse/internal/chat"
+	"connverse/app/chat"
 	"fmt"
 	"strings"
 

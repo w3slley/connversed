@@ -1,7 +1,7 @@
 package chat
 
 const (
-	WELCOME           = "Hey %s! Welcome to connverse, your TCP chat application accessed via SSH \n"
+	WELCOME           = "Hey %s! Welcome to connversed, your TCP chat application accessed via SSH.\n"
 	CLIENT_CONNECTED  = "Client %s connected \n"
 	USER_JOINED_ROOM  = "User %s joined the room\n"
 	JOINED_ROOM       = "Welcome to the room: %s. \n"

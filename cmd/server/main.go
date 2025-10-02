@@ -4,8 +4,8 @@ import (
 	"log"
 	"net"
 
-	"connverse/application/chat"
-	"connverse/infrastructure/http"
+	"connverse/app/chat"
+	"connverse/http"
 )
 
 const (

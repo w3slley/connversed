@@ -5,7 +5,7 @@ import (
 	"log"
 	"net"
 
-	"connverse/application/chat"
+	"connverse/app/chat"
 )
 
 func HandleClientInput(conn net.Conn, lobby *chat.Lobby) {
