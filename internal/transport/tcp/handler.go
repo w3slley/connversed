@@ -1,11 +1,11 @@
-package http
+package tcp
 
 import (
 	"bufio"
 	"log"
 	"net"
 
-	"connverse/app/chat"
+	"connverse/internal/chat"
 )
 
 func HandleClientInput(conn net.Conn, lobby *chat.Lobby) {

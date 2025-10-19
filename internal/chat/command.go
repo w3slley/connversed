@@ -81,6 +81,7 @@ func getCommandFromMessage(message string) Command {
 	return command
 }
 
+// Example: /username test -> test
 func getCommandArgument(message string) string {
 	return strings.TrimSuffix(strings.TrimPrefix(message, " "), "\n")
 }

@@ -4,8 +4,8 @@ import (
 	"log"
 	"net"
 
-	"connverse/app/chat"
-	"connverse/http"
+	"connverse/internal/chat"
+	"connverse/internal/transport/tcp"
 )
 
 const (
@@ -28,6 +28,6 @@ func main() {
 		if err != nil {
 			log.Println("Error: ", err)
 		}
-		go http.HandleClientInput(conn, lobby)
+		go tcp.HandleClientInput(conn, lobby)
 	}
 }
