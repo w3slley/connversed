@@ -1,6 +1,8 @@
 package ui
 
 import (
+	"github.com/charmbracelet/bubbles/textinput"
+	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/ssh"
@@ -30,20 +32,33 @@ type Model struct {
 	CurrentScreen screen
 	CurrentFocus  focus
 	UserInput     string
-	Messages      *[]Message
+	Messages      []string
 	Session       ssh.Session
 	Style         lipgloss.Style
 	ErrStyle      lipgloss.Style
+	TextInput     textinput.Model
+	Viewport      viewport.Model
+	Ready         bool
 }
 
 func InitialModel(s ssh.Session) Model {
 	renderer := bubbletea.MakeRenderer(s)
+
+	ti := textinput.New()
+	ti.Placeholder = "Type a message..."
+	ti.Focus()
+	ti.CharLimit = 256
+	ti.Width = 50
+
 	return Model{
 		CurrentScreen: WelcomeScreen,
 		CurrentFocus:  None,
 		Session:       s,
 		Style:         renderer.NewStyle().Foreground(lipgloss.Color("8")),
 		ErrStyle:      renderer.NewStyle().Foreground(lipgloss.Color("3")),
+		TextInput:     ti,
+		Messages:      []string{},
+		Ready:         false,
 	}
 }
 
@@ -52,22 +67,89 @@ func (m Model) Init() tea.Cmd {
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var (
+		cmd  tea.Cmd
+		cmds []tea.Cmd
+	)
+
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
+		// Global key bindings (work on any screen)
 		switch msg.String() {
-		case "c":
-		case "j":
-		case "s":
-		case "u":
 		case "q", "ctrl+c":
 			return m, tea.Quit
 		}
+
+		// Screen-specific key bindings
+		switch m.CurrentScreen {
+		case WelcomeScreen:
+			switch msg.String() {
+			case "l":
+				m.CurrentScreen = LobbyScreen
+				m.CurrentFocus = InputFocus
+				m.TextInput.Focus()
+				return m, nil
+			}
+
+		case LobbyScreen:
+			// Handle focus-specific keys
+			if m.CurrentFocus == InputFocus {
+				switch msg.String() {
+				case "enter":
+					// Send message
+					if m.TextInput.Value() != "" {
+						m.Messages = append(m.Messages, m.TextInput.Value())
+						m.TextInput.Reset()
+						m.Viewport.GotoBottom()
+					}
+					return m, nil
+				case "esc":
+					// Switch to messages focus
+					m.CurrentFocus = MessagesFocus
+					m.TextInput.Blur()
+					return m, nil
+				default:
+					// Update text input
+					m.TextInput, cmd = m.TextInput.Update(msg)
+					cmds = append(cmds, cmd)
+				}
+			} else if m.CurrentFocus == MessagesFocus {
+				switch msg.String() {
+				case "esc", "i":
+					// Switch back to input focus
+					m.CurrentFocus = InputFocus
+					m.TextInput.Focus()
+					return m, nil
+				default:
+					// Update viewport for scrolling
+					m.Viewport, cmd = m.Viewport.Update(msg)
+					cmds = append(cmds, cmd)
+				}
+			}
+		}
+
 	case tea.WindowSizeMsg:
 		m.Width = msg.Width
 		m.Height = msg.Height
+
+		// Calculate viewport height: total height - header (2) - input box (4) - command bar (2) - padding (2)
+		viewportHeight := msg.Height - 10
+
+		if !m.Ready {
+			// Initialize viewport with proper dimensions
+			m.Viewport = viewport.New(msg.Width-6, viewportHeight) // -6 for border and padding
+			m.Viewport.YPosition = 0
+			m.Ready = true
+		} else {
+			m.Viewport.Width = msg.Width - 6
+			m.Viewport.Height = viewportHeight
+		}
+
+		// Update text input width
+		m.TextInput.Width = msg.Width - 4
 	}
 
-	return m, nil
+	return m, tea.Batch(cmds...)
 }
 
 func (m Model) View() string {
