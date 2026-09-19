@@ -123,7 +123,10 @@ func LobbyView(m Model) string {
 	headerHeight := lipgloss.Height(header)
 	inputHeight := lipgloss.Height(inputBox)
 	commandHeight := lipgloss.Height(commandBar)
-	availableHeight := m.Height - headerHeight - inputHeight - commandHeight - 2 // -2 for padding
+	availableHeight := m.Height - headerHeight - inputHeight - commandHeight - messagesBoxStyle.GetVerticalFrameSize()
+	if availableHeight < 0 {
+		availableHeight = 0
+	}
 
 	// Messages area
 	messagesContent := ""
@@ -137,6 +140,7 @@ func LobbyView(m Model) string {
 	}
 
 	// Set viewport content
+	m.Viewport.Height = availableHeight
 	m.Viewport.SetContent(messagesContent)
 	messagesBox := messagesBoxStyle.Height(availableHeight).Render(m.Viewport.View())
 

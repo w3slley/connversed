@@ -1,6 +1,8 @@
 package ui
 
 import (
+	"fmt"
+
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
@@ -39,13 +41,21 @@ type Model struct {
 	TextInput     textinput.Model
 	Viewport      viewport.Model
 	Ready         bool
+	Lobby         *Lobby
+	Incoming      <-chan ChatMessage
 }
 
-func InitialModel(s ssh.Session) Model {
+func InitialModel(s ssh.Session, lobby *Lobby) Model {
 	renderer := bubbletea.MakeRenderer(s)
+	incoming := lobby.Join()
+	go func() {
+		<-s.Context().Done()
+		lobby.Leave(incoming)
+	}()
 
 	ti := textinput.New()
 	ti.Placeholder = "Type a message..."
+	ti.Prompt = ""
 	ti.Focus()
 	ti.CharLimit = 256
 	ti.Width = 50
@@ -59,11 +69,13 @@ func InitialModel(s ssh.Session) Model {
 		TextInput:     ti,
 		Messages:      []string{},
 		Ready:         false,
+		Lobby:         lobby,
+		Incoming:      incoming,
 	}
 }
 
 func (m Model) Init() tea.Cmd {
-	return nil
+	return waitForMessage(m.Incoming)
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -73,6 +85,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	)
 
 	switch msg := msg.(type) {
+	case ChatMessage:
+		m.Messages = append(m.Messages, fmt.Sprintf("%s: %s", msg.Username, msg.Text))
+		m.Viewport.GotoBottom()
+		return m, waitForMessage(m.Incoming)
+
 	case tea.KeyMsg:
 		// Global key bindings (work on any screen)
 		switch msg.String() {
@@ -98,9 +115,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				case "enter":
 					// Send message
 					if m.TextInput.Value() != "" {
-						m.Messages = append(m.Messages, m.TextInput.Value())
+						m.Lobby.Broadcast(ChatMessage{
+							Username: m.Session.User(),
+							Text:     m.TextInput.Value(),
+						})
 						m.TextInput.Reset()
-						m.Viewport.GotoBottom()
 					}
 					return m, nil
 				case "esc":
@@ -145,11 +164,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.Viewport.Height = viewportHeight
 		}
 
-		// Update text input width
-		m.TextInput.Width = msg.Width - 4
+		// Reserve space for the input box frame and focus indicator.
+		m.TextInput.Width = msg.Width - 6
 	}
 
 	return m, tea.Batch(cmds...)
+}
+
+func waitForMessage(messages <-chan ChatMessage) tea.Cmd {
+	return func() tea.Msg {
+		return <-messages
+	}
 }
 
 func (m Model) View() string {

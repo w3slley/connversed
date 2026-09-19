@@ -26,11 +26,12 @@ const (
 )
 
 func main() {
+	lobby := ui.NewLobby()
 	s, err := wish.NewServer(
 		wish.WithAddress(net.JoinHostPort(host, port)),
 		ssh.AllocatePty(),
 		wish.WithMiddleware(
-			bubbletea.Middleware(teaHandler),
+			bubbletea.Middleware(teaHandler(lobby)),
 			activeterm.Middleware(),
 			logging.Middleware(),
 		),
@@ -58,7 +59,9 @@ func main() {
 	}
 }
 
-func teaHandler(s ssh.Session) (tea.Model, []tea.ProgramOption) {
-	m := ui.InitialModel(s)
-	return m, []tea.ProgramOption{tea.WithAltScreen()}
+func teaHandler(lobby *ui.Lobby) bubbletea.Handler {
+	return func(s ssh.Session) (tea.Model, []tea.ProgramOption) {
+		m := ui.InitialModel(s, lobby)
+		return m, []tea.ProgramOption{tea.WithAltScreen()}
+	}
 }
