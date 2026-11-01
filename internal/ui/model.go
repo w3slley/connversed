@@ -11,14 +11,7 @@ import (
 	"github.com/charmbracelet/wish/bubbletea"
 )
 
-type screen int
 type focus int
-
-const (
-	WelcomeScreen screen = iota
-	LobbyScreen
-	RoomScreen
-)
 
 const (
 	None focus = iota
@@ -29,25 +22,26 @@ const (
 type Message struct{}
 
 type Model struct {
-	Width         int
-	Height        int
-	CurrentScreen screen
-	CurrentFocus  focus
-	UserInput     string
-	Messages      []string
-	Session       ssh.Session
-	Style         lipgloss.Style
-	ErrStyle      lipgloss.Style
-	TextInput     textinput.Model
-	Viewport      viewport.Model
-	Ready         bool
-	Lobby         *Lobby
-	Incoming      <-chan ChatMessage
+	Width        int
+	Height       int
+	CurrentFocus focus
+	UserInput    string
+	Messages     []string
+	Session      ssh.Session
+	Renderer     *lipgloss.Renderer
+	Color        string
+	Style        lipgloss.Style
+	ErrStyle     lipgloss.Style
+	TextInput    textinput.Model
+	Viewport     viewport.Model
+	Ready        bool
+	Lobby        *Lobby
+	Incoming     <-chan ChatMessage
 }
 
 func InitialModel(s ssh.Session, lobby *Lobby) Model {
 	renderer := bubbletea.MakeRenderer(s)
-	incoming := lobby.Join()
+	incoming, color := lobby.Join()
 	go func() {
 		<-s.Context().Done()
 		lobby.Leave(incoming)
@@ -61,16 +55,17 @@ func InitialModel(s ssh.Session, lobby *Lobby) Model {
 	ti.Width = 50
 
 	return Model{
-		CurrentScreen: WelcomeScreen,
-		CurrentFocus:  None,
-		Session:       s,
-		Style:         renderer.NewStyle().Foreground(lipgloss.Color("8")),
-		ErrStyle:      renderer.NewStyle().Foreground(lipgloss.Color("3")),
-		TextInput:     ti,
-		Messages:      []string{},
-		Ready:         false,
-		Lobby:         lobby,
-		Incoming:      incoming,
+		CurrentFocus: InputFocus,
+		Renderer:     renderer,
+		Color:        color,
+		Session:      s,
+		Style:        renderer.NewStyle().Foreground(lipgloss.Color("8")),
+		ErrStyle:     renderer.NewStyle().Foreground(lipgloss.Color("3")),
+		TextInput:    ti,
+		Messages:     []string{},
+		Ready:        false,
+		Lobby:        lobby,
+		Incoming:     incoming,
 	}
 }
 
@@ -86,64 +81,47 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case ChatMessage:
-		m.Messages = append(m.Messages, fmt.Sprintf("%s: %s", msg.Username, msg.Text))
+		name := m.Renderer.NewStyle().Bold(true).Foreground(lipgloss.Color(msg.Color)).Render(msg.Username)
+		m.Messages = append(m.Messages, fmt.Sprintf("%s: %s", name, msg.Text))
 		m.Viewport.GotoBottom()
 		return m, waitForMessage(m.Incoming)
 
 	case tea.KeyMsg:
-		// Global key bindings (work on any screen)
-		switch msg.String() {
-		case "q", "ctrl+c":
+		if msg.String() == "ctrl+c" {
 			return m, tea.Quit
 		}
 
-		// Screen-specific key bindings
-		switch m.CurrentScreen {
-		case WelcomeScreen:
+		if m.CurrentFocus == InputFocus {
 			switch msg.String() {
-			case "l":
-				m.CurrentScreen = LobbyScreen
+			case "enter":
+				if m.TextInput.Value() != "" {
+					m.Lobby.Broadcast(ChatMessage{
+						Username: m.Session.User(),
+						Color:    m.Color,
+						Text:     m.TextInput.Value(),
+					})
+					m.TextInput.Reset()
+				}
+				return m, nil
+			case "esc":
+				m.CurrentFocus = MessagesFocus
+				m.TextInput.Blur()
+				return m, nil
+			default:
+				m.TextInput, cmd = m.TextInput.Update(msg)
+				cmds = append(cmds, cmd)
+			}
+		} else if m.CurrentFocus == MessagesFocus {
+			switch msg.String() {
+			case "q":
+				return m, tea.Quit
+			case "esc", "i":
 				m.CurrentFocus = InputFocus
 				m.TextInput.Focus()
 				return m, nil
-			}
-
-		case LobbyScreen:
-			// Handle focus-specific keys
-			if m.CurrentFocus == InputFocus {
-				switch msg.String() {
-				case "enter":
-					// Send message
-					if m.TextInput.Value() != "" {
-						m.Lobby.Broadcast(ChatMessage{
-							Username: m.Session.User(),
-							Text:     m.TextInput.Value(),
-						})
-						m.TextInput.Reset()
-					}
-					return m, nil
-				case "esc":
-					// Switch to messages focus
-					m.CurrentFocus = MessagesFocus
-					m.TextInput.Blur()
-					return m, nil
-				default:
-					// Update text input
-					m.TextInput, cmd = m.TextInput.Update(msg)
-					cmds = append(cmds, cmd)
-				}
-			} else if m.CurrentFocus == MessagesFocus {
-				switch msg.String() {
-				case "esc", "i":
-					// Switch back to input focus
-					m.CurrentFocus = InputFocus
-					m.TextInput.Focus()
-					return m, nil
-				default:
-					// Update viewport for scrolling
-					m.Viewport, cmd = m.Viewport.Update(msg)
-					cmds = append(cmds, cmd)
-				}
+			default:
+				m.Viewport, cmd = m.Viewport.Update(msg)
+				cmds = append(cmds, cmd)
 			}
 		}
 
@@ -178,11 +156,5 @@ func waitForMessage(messages <-chan ChatMessage) tea.Cmd {
 }
 
 func (m Model) View() string {
-	switch m.CurrentScreen {
-	case WelcomeScreen:
-		return WelcomeView(m)
-	case LobbyScreen:
-		return LobbyView(m)
-	}
-	return ""
+	return LobbyView(m)
 }

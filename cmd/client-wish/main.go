@@ -20,15 +20,30 @@ import (
 	"connverse/internal/ui"
 )
 
+// Defaults suit local development; the container overrides them through the
+// environment (see the Dockerfile).
 const (
-	host = "localhost"
-	port = "23234"
+	defaultHost        = "localhost"
+	defaultPort        = "23234"
+	defaultHostKeyPath = ".ssh/id_ed25519"
 )
 
+func getenv(key, fallback string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return fallback
+}
+
 func main() {
+	host := getenv("CONNVERSED_HOST", defaultHost)
+	port := getenv("CONNVERSED_PORT", defaultPort)
+	hostKeyPath := getenv("CONNVERSED_HOST_KEY_PATH", defaultHostKeyPath)
+
 	lobby := ui.NewLobby()
 	s, err := wish.NewServer(
 		wish.WithAddress(net.JoinHostPort(host, port)),
+		wish.WithHostKeyPath(hostKeyPath),
 		ssh.AllocatePty(),
 		wish.WithMiddleware(
 			bubbletea.Middleware(teaHandler(lobby)),

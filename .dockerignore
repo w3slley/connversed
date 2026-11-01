@@ -1,0 +1,7 @@
+.git
+bin
+docs
+*.md
+Dockerfile
+.dockerignore
+.ssh

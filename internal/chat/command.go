@@ -21,13 +21,9 @@ const (
 )
 
 const (
-	LOBBY_UI_COMMAND        = "l - go to lobby"
-	JOIN_ROOM_UI_COMMAND    = "j - join room"
-	CREATE_ROOM_UI_COMMAND  = "c - create room"
-	SEND_MESSAGE_COMMAND    = "enter - send message"
-	TOGGLE_FOCUS_COMMAND    = "esc - toggle focus"
-	SEND_MESSAGE_UI_COMMAND = "s - send message"
-	QUIT_UI_COMMAND         = "q - quit"
+	SEND_MESSAGE_COMMAND = "enter - send message"
+	TOGGLE_FOCUS_COMMAND = "esc - toggle focus"
+	QUIT_UI_COMMAND      = "ctrl+c - quit"
 )
 
 func GetCommands() map[string]Command {

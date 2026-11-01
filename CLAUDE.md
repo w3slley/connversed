@@ -16,7 +16,7 @@ The codebase follows a modular structure with three main executables and a clear
 
 2. **`cmd/client/main.go`** - Basic TCP client that connects to the server. Uses separate goroutines for reading from and writing to the connection.
 
-3. **`cmd/client-wish/main.go`** - SSH-based client built with Charm's Wish/Bubbletea libraries. Runs an SSH server on `localhost:23234` with a TUI interface. Note: Currently only displays the welcome screen - does not yet connect to the TCP server.
+3. **`cmd/client-wish/main.go`** - SSH-based client built with Charm's Wish/Bubbletea libraries. Runs an SSH server (default `localhost:23234`; override with `CONNVERSED_HOST`, `CONNVERSED_PORT` and `CONNVERSED_HOST_KEY_PATH`) with a TUI. It currently offers a single shared lobby; it does not yet connect to the TCP server. Rooms are the next feature.
 
 ### Internal Packages (`internal/`)
 
@@ -47,8 +47,9 @@ The chat logic is centralized in this package with the following key components:
 
 #### UI Layer (`internal/ui/`)
 
-- **`model.go`** - Bubbletea model implementing the TUI for the wish client. Manages screens (Welcome, Lobby, Room), focus states, and user input.
-- **`views.go`** - Rendering functions for different screens (`WelcomeView`, `LobbyView`).
+- **`model.go`** - Bubbletea model implementing the TUI for the wish client. Manages focus (input vs messages) and user input. There is no welcome screen: sessions start in the lobby.
+- **`lobby.go`** - In-memory shared lobby that broadcasts messages and hands each connected user a color that is not in use by anyone else (random from `colors.go`).
+- **`views.go`** - `LobbyView`, which only advertises features that exist today.
 
 ### Data Flow
 
@@ -116,4 +117,5 @@ go build -o bin/client-wish cmd/client-wish/main.go
 - Client IDs and Room IDs are UUIDs
 - Default username is "anonymous" until changed
 - Rooms are automatically created on first `/join` and deleted when empty
-- The Wish client (client-wish) is incomplete - only welcome and lobby views are implemented
+- The Wish client (client-wish) is incomplete - only the lobby is implemented (rooms come next)
+- `Dockerfile` builds `cmd/client-wish` into a small image for Coolify. Expose TCP port 23234 and persist `/data/.ssh` so the SSH host key survives redeploys

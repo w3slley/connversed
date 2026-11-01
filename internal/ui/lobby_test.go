@@ -7,8 +7,8 @@ import (
 
 func TestLobbyBroadcastsMessagesToEverySubscriber(t *testing.T) {
 	lobby := NewLobby()
-	alice := lobby.Join()
-	bob := lobby.Join()
+	alice, _ := lobby.Join()
+	bob, _ := lobby.Join()
 	message := ChatMessage{Username: "alice", Text: "hello bob"}
 
 	lobby.Broadcast(message)
@@ -32,8 +32,8 @@ func TestLobbyBroadcastsMessagesToEverySubscriber(t *testing.T) {
 
 func TestLobbyStopsBroadcastingToUsersWhoLeave(t *testing.T) {
 	lobby := NewLobby()
-	alice := lobby.Join()
-	bob := lobby.Join()
+	alice, _ := lobby.Join()
+	bob, _ := lobby.Join()
 	lobby.Leave(bob)
 
 	lobby.Broadcast(ChatMessage{Username: "alice", Text: "still here"})
@@ -48,5 +48,40 @@ func TestLobbyStopsBroadcastingToUsersWhoLeave(t *testing.T) {
 	case message := <-bob:
 		t.Fatalf("departed user received %#v", message)
 	default:
+	}
+}
+
+func TestLobbyGivesConnectedUsersDistinctColors(t *testing.T) {
+	lobby := NewLobby()
+	seen := map[string]bool{}
+
+	for range userColors {
+		_, color := lobby.Join()
+		if seen[color] {
+			t.Fatalf("color %q was handed out twice", color)
+		}
+		seen[color] = true
+	}
+
+	// Every color is taken now, so a further user still gets one.
+	if _, color := lobby.Join(); color == "" {
+		t.Fatal("no color assigned once the palette is exhausted")
+	}
+}
+
+func TestLobbyReusesColorsOfUsersWhoLeave(t *testing.T) {
+	lobby := NewLobby()
+	var first <-chan ChatMessage
+	var firstColor string
+	for i := range userColors {
+		ch, color := lobby.Join()
+		if i == 0 {
+			first, firstColor = ch, color
+		}
+	}
+	lobby.Leave(first)
+
+	if _, color := lobby.Join(); color != firstColor {
+		t.Fatalf("color = %q, want freed color %q", color, firstColor)
 	}
 }

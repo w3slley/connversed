@@ -1,7 +1,6 @@
 package chat
 
 const (
-	WELCOME           = "Hey %s! Welcome to connversed, your TCP chat application accessed via SSH.\n"
 	CLIENT_CONNECTED  = "Client %s connected \n"
 	USER_JOINED_ROOM  = "User %s joined the room\n"
 	JOINED_ROOM       = "Welcome to the room: %s. \n"
@@ -15,4 +14,5 @@ const (
 	COMMAND_NOT_FOUND = "Message does not contain command.\n"
 	INVALID_COMMAND   = "Command '%s' is invalid.\n"
 	CURRENT_ROOM_ICON = "* "
+	ROOMS_COMING_NEXT = "Rooms are coming next!"
 )
