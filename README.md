@@ -8,6 +8,8 @@ ssh -p 2222 yourname@connversed.apps.longitood.com
 
 Your SSH key is your identity: the first key to log in with a username owns it. Run `ssh-keygen -t ed25519` first if you don't have a key yet.
 
+Usage is counted (messages, logins, rejected logins, refused connections, users online) and logged every 5 minutes when it changes. Only numbers are recorded, never usernames or message text.
+
 ## Roadmap
 
 - **Rooms.** The TUI has a single shared lobby for now; rooms are next.
@@ -36,7 +38,8 @@ Today the tests in `internal/server` start a real server on a random port and lo
 - Never wait with fixed sleeps; poll for the expected state until a deadline.
 - Always use random ports.
 - Make randomness controllable: the user colour choice needs a seedable source. The rate limiter already takes a fake clock.
-- `go test -race` is currently unreliable: it flags a data race between the SSH library closing the terminal and Bubble Tea still reading it when a session disconnects (roughly one run in three, present before the security changes). Upgrade the Charm libraries first, or run the race detector only on packages that do not start real sessions, so a flaky required check does not teach everyone to ignore red builds.
+- `go test -race` is currently unreliable: it flags a data race between the SSH library closing the terminal and Bubble Tea's input reader (in `muesli/cancelreader`, which has no newer release) when a session disconnects. It predates the security work and is not fixed by upgrading bubbletea and wish. Run the race detector only on packages that do not start real sessions until upstream fixes it, so a flaky required check does not teach everyone to ignore red builds.
+- Sessions that died at startup under CPU load ("error reading input: bad file descriptor", about 2 in 30 full runs) were fixed by upgrading bubbletea to 1.3.10 and wish to 1.4.7. If it ever comes back, treat it as a bug in the stack, not as noise to retry away.
 
 ### Suggested order
 

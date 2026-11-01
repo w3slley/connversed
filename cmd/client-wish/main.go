@@ -30,6 +30,7 @@ func main() {
 	cfg.Addr = net.JoinHostPort(host, port)
 	cfg.HostKeyPath = getenv("CONNVERSED_HOST_KEY_PATH", cfg.HostKeyPath)
 	cfg.UsersPath = getenv("CONNVERSED_USERS_PATH", cfg.UsersPath)
+	cfg.StatsPath = getenv("CONNVERSED_STATS_PATH", cfg.StatsPath)
 
 	s, err := server.New(cfg)
 	if err != nil {
@@ -48,7 +49,7 @@ func main() {
 
 	<-done
 	log.Info("Stopping SSH server")
-	if err := server.Shutdown(s, 30*time.Second); err != nil {
+	if err := s.Stop(30 * time.Second); err != nil {
 		log.Error("Could not stop server", "error", err)
 	}
 }

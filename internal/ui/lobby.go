@@ -19,6 +19,11 @@ type subscriber struct {
 }
 
 type Lobby struct {
+	// OnMessage, if set, is called once for every message that is delivered
+	// (after cleaning; dropped empty messages do not count). Set it before the
+	// lobby is shared between goroutines.
+	OnMessage func()
+
 	mu          sync.RWMutex
 	subscribers map[<-chan ChatMessage]subscriber
 }
@@ -56,6 +61,9 @@ func (l *Lobby) Broadcast(message ChatMessage) {
 	message.Text = SanitizeMessage(message.Text)
 	if message.Text == "" {
 		return
+	}
+	if l.OnMessage != nil {
+		l.OnMessage()
 	}
 
 	l.mu.RLock()

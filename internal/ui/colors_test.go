@@ -61,3 +61,39 @@ func TestLobbyViewOnlyAdvertisesAvailableFeatures(t *testing.T) {
 		}
 	}
 }
+
+func TestLobbyViewShowsTheUsersOwnName(t *testing.T) {
+	input := textinput.New()
+	view := LobbyView(Model{
+		Width: 100, Height: 30,
+		CurrentFocus: InputFocus,
+		TextInput:    input,
+		Username:     "wes",
+		Color:        "214",
+		Renderer:     lipgloss.NewRenderer(nil),
+	})
+	if !strings.Contains(view, "you are") || !strings.Contains(view, "wes") {
+		t.Fatalf("header does not tell the user who they are:\n%s", view)
+	}
+}
+
+func TestLobbyViewNeverOverflowsTheTerminalWidth(t *testing.T) {
+	// A line wider than the terminal gets wrapped by the terminal itself, which
+	// shifts the whole screen down a row.
+	input := textinput.New()
+	input.Prompt = ""
+	input.Width = 54
+	input.Focus()
+
+	for _, width := range []int{60, 70, 100} {
+		for _, name := range []string{"", "wes", strings.Repeat("x", 20)} {
+			model := Model{Width: width, Height: 33, CurrentFocus: InputFocus, TextInput: input,
+				Username: name, Color: "214", Renderer: lipgloss.NewRenderer(nil)}
+			for i, line := range strings.Split(LobbyView(model), "\n") {
+				if w := lipgloss.Width(line); w > width {
+					t.Errorf("width %d, username %q: line %d is %d columns wide: %q", width, name, i, w, line)
+				}
+			}
+		}
+	}
+}

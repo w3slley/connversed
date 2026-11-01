@@ -35,10 +35,27 @@ func LobbyView(m Model) string {
 		Bold(true)
 
 	// Header
-	header := lipgloss.JoinHorizontal(lipgloss.Top,
-		headerStyle.Render("Lobby"),
-		lipgloss.NewStyle().Foreground(lipgloss.Color("8")).Padding(0, 1).Render("· "+chat.ROOMS_COMING_NEXT),
-	)
+	// Use the session's renderer for the username so its color matches the
+	// one shown in the chat.
+	userStyle := lipgloss.NewStyle()
+	if m.Renderer != nil {
+		userStyle = m.Renderer.NewStyle()
+	}
+	you := ""
+	if m.Username != "" {
+		you = userStyle.Bold(true).Foreground(lipgloss.Color(m.Color)).Render(m.Username)
+		you = lipgloss.NewStyle().Foreground(lipgloss.Color("8")).Padding(0, 1).Render("· you are ") + you
+	}
+	roomsNote := lipgloss.NewStyle().Foreground(lipgloss.Color("8")).Padding(0, 1).Render("· " + chat.ROOMS_COMING_NEXT)
+	header := lipgloss.JoinHorizontal(lipgloss.Top, headerStyle.Render("Lobby"), you, roomsNote)
+	if m.Width > 0 && lipgloss.Width(header) > m.Width {
+		// On a narrow terminal drop the note instead of wrapping, which would
+		// push the rest of the screen down a line.
+		header = lipgloss.JoinHorizontal(lipgloss.Top, headerStyle.Render("Lobby"), you)
+	}
+	if m.Width > 0 {
+		header = lipgloss.NewStyle().MaxWidth(m.Width).Render(header)
+	}
 
 	// Command bar (render first to calculate height)
 	commands := []string{

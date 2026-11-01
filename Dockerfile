@@ -20,7 +20,8 @@ COPY --from=build /out/connversed /usr/local/bin/connversed
 ENV CONNVERSED_HOST=0.0.0.0 \
     CONNVERSED_PORT=23234 \
     CONNVERSED_HOST_KEY_PATH=/data/.ssh/id_ed25519 \
-    CONNVERSED_USERS_PATH=/data/.ssh/connversed_users
+    CONNVERSED_USERS_PATH=/data/.ssh/connversed_users \
+    CONNVERSED_STATS_PATH=/data/.ssh/connversed_stats.json
 VOLUME /data/.ssh
 EXPOSE 23234
 

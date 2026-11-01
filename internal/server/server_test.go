@@ -14,6 +14,8 @@ import (
 
 	"github.com/charmbracelet/ssh"
 	gossh "golang.org/x/crypto/ssh"
+
+	"connverse/internal/stats"
 )
 
 func testConfig(t *testing.T) Config {
@@ -21,10 +23,17 @@ func testConfig(t *testing.T) Config {
 	dir := t.TempDir()
 	cfg.HostKeyPath = filepath.Join(dir, "host_ed25519")
 	cfg.UsersPath = filepath.Join(dir, "users")
+	cfg.StatsPath = filepath.Join(dir, "stats.json")
 	return cfg
 }
 
 func start(t *testing.T, cfg Config) string {
+	t.Helper()
+	_, addr := startServer(t, cfg)
+	return addr
+}
+
+func startServer(t *testing.T, cfg Config) (*Server, string) {
 	t.Helper()
 	srv, err := New(cfg)
 	if err != nil {
@@ -39,8 +48,8 @@ func start(t *testing.T, cfg Config) string {
 			t.Error(err)
 		}
 	}()
-	t.Cleanup(func() { _ = Shutdown(srv, time.Second) })
-	return l.Addr().String()
+	t.Cleanup(func() { _ = srv.Stop(time.Second) })
+	return srv, l.Addr().String()
 }
 
 func newSigner(t *testing.T) gossh.Signer {
@@ -262,5 +271,137 @@ func eventually(t *testing.T, connect func() (*gossh.Client, error)) *gossh.Clie
 			t.Fatalf("could not connect: %v", err)
 		}
 		time.Sleep(50 * time.Millisecond)
+	}
+}
+
+// chat logs in, opens the lobby and sends one message through the TUI.
+func chat(t *testing.T, client *gossh.Client, text string) {
+	t.Helper()
+	session, err := client.NewSession()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { session.Close() })
+	var out syncBuffer
+	session.Stdout = &out
+	stdin, err := session.StdinPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := session.RequestPty("xterm-256color", 30, 100, gossh.TerminalModes{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := session.Shell(); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, &out, "Rooms are coming next")
+	// Bubble Tea reads a multi-character write as one paste, so press enter
+	// separately, as a real keypress would arrive.
+	if _, err := stdin.Write([]byte(text)); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(100 * time.Millisecond)
+	if _, err := stdin.Write([]byte("\r")); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, &out, ": "+text) // our own message comes back through the lobby
+}
+
+func waitFor(t *testing.T, out *syncBuffer, want string) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for !strings.Contains(out.String(), want) {
+		if time.Now().After(deadline) {
+			t.Fatalf("never saw %q; output: %q", want, out.String())
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+}
+
+// waitNobodyOnline waits for the server to notice that every session ended.
+func waitNobodyOnline(t *testing.T, srv *Server) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for srv.Usage().Online != 0 {
+		if time.Now().After(deadline) {
+			t.Fatalf("%d sessions still online", srv.Usage().Online)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+}
+
+func readStats(t *testing.T, path string) stats.Snapshot {
+	t.Helper()
+	s, err := stats.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return s.Snapshot()
+}
+
+func TestUsageIsCountedAndSurvivesARestart(t *testing.T) {
+	cfg := testConfig(t)
+	owner := newSigner(t)
+
+	srv, addr := startServer(t, cfg)
+	client, _, err := dial(addr, "wes", owner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	chat(t, client, "hello there")
+	client.Close()
+	waitNobodyOnline(t, srv)
+	if _, _, err := dial(addr, "wes", newSigner(t)); err == nil { // wrong key
+		t.Fatal("another key logged in as wes")
+	}
+	if _, _, err := dial(addr, "bad name", newSigner(t)); err == nil { // invalid name
+		t.Fatal("invalid name was allowed")
+	}
+	if err := srv.Stop(2 * time.Second); err != nil {
+		t.Fatal(err)
+	}
+
+	got := readStats(t, cfg.StatsPath)
+	want := stats.Snapshot{Messages: 1, Logins: 1, Rejected: 2}
+	if got != want {
+		t.Fatalf("after the first run = %+v, want %+v", got, want)
+	}
+
+	// A new server keeps counting on top of the saved totals.
+	srv, addr = startServer(t, cfg)
+	client, _, err = dial(addr, "wes", owner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	chat(t, client, "back again")
+	client.Close()
+	waitNobodyOnline(t, srv)
+	if err := srv.Stop(2 * time.Second); err != nil {
+		t.Fatal(err)
+	}
+	want = stats.Snapshot{Messages: 2, Logins: 2, Rejected: 2}
+	if got := readStats(t, cfg.StatsPath); got != want {
+		t.Fatalf("after the restart = %+v, want %+v", got, want)
+	}
+}
+
+func TestRefusedConnectionsAreCounted(t *testing.T) {
+	cfg := testConfig(t)
+	cfg.MaxConnsPerHost = 1
+	srv, addr := startServer(t, cfg)
+
+	first, _, err := dial(addr, "wes", newSigner(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := dial(addr, "bob", newSigner(t)); err == nil {
+		t.Fatal("second connection was allowed")
+	}
+	first.Close() // Stop waits for open connections
+	if err := srv.Stop(2 * time.Second); err != nil {
+		t.Fatal(err)
+	}
+	if got := readStats(t, cfg.StatsPath).Refused; got != 1 {
+		t.Fatalf("refused = %d, want 1", got)
 	}
 }
