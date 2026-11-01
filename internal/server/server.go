@@ -29,10 +29,9 @@ type Config struct {
 	HostKeyPath string
 	// UsersPath is the file that records which SSH key owns each username.
 	UsersPath string
-	// StatsPath is where usage totals are saved; StatsInterval is how often
-	// they are saved and logged (only when they changed).
-	StatsPath     string
-	StatsInterval time.Duration
+	// StatsPath is where usage totals are saved. They are written to the log
+	// once a day at midnight UTC.
+	StatsPath string
 
 	// IdleTimeout closes connections with no traffic in either direction,
 	// including ones that never finish the SSH handshake.
@@ -53,7 +52,6 @@ func DefaultConfig() Config {
 		HostKeyPath:     ".ssh/id_ed25519",
 		UsersPath:       ".ssh/connversed_users",
 		StatsPath:       ".ssh/connversed_stats.json",
-		StatsInterval:   5 * time.Minute,
 		IdleTimeout:     30 * time.Minute,
 		MaxConns:        200,
 		MaxConnsPerHost: 5,
@@ -104,7 +102,7 @@ func New(cfg Config) (*Server, error) {
 	return &Server{
 		Server:   srv,
 		usage:    usage,
-		reporter: stats.StartReporter(usage, cfg.StatsPath, cfg.StatsInterval),
+		reporter: stats.StartReporter(usage, cfg.StatsPath),
 	}, nil
 }
 

@@ -53,7 +53,7 @@ The chat logic is centralized in this package with the following key components:
 #### Usage stats (`internal/stats/`)
 
 - **`stats.go`** - Counters for messages sent, successful logins, rejected logins (no key, name owned by another key, invalid name) and refused connections (hit a connection cap), plus users online now. Numbers only: never usernames or message text. Totals are saved atomically to `CONNVERSED_STATS_PATH` and continue across restarts; `online` is never saved. All methods accept a nil receiver.
-- **`reporter.go`** - Every 5 minutes (and once more on shutdown) saves the totals and writes a `usage messages=… logins=… rejected=… refused=… online=…` log line, but only if something changed. Read the numbers in the container logs. Rejections are counted once per failed login attempt, so a client that gives up before keyboard-interactive auth is not counted.
+- **`reporter.go`** - Saves the totals every 5 minutes (so a crash loses minutes, not a day) and writes one `usage messages=… logins=… rejected=… refused=… online=…` log line per day at 00:00 UTC, plus a final save and line on shutdown so a redeploy leaves the last numbers in the old container's logs. Read them in the container logs. Rejections are counted once per failed login attempt, so a client that gives up before keyboard-interactive auth is not counted.
 
 #### Limits (`internal/limits/`)
 
