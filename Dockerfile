@@ -13,12 +13,14 @@ RUN adduser -D -u 10001 connversed \
 USER connversed
 COPY --from=build /out/connversed /usr/local/bin/connversed
 
-# Listen on every interface inside the container. The host key lives on a
-# volume so it survives redeploys; without it clients get a "host key changed"
-# warning after every deploy.
+# Listen on every interface inside the container. The host key and the
+# username registry live on a volume so they survive redeploys: without it
+# clients get a "host key changed" warning after every deploy, and anyone could
+# take over a username.
 ENV CONNVERSED_HOST=0.0.0.0 \
     CONNVERSED_PORT=23234 \
-    CONNVERSED_HOST_KEY_PATH=/data/.ssh/id_ed25519
+    CONNVERSED_HOST_KEY_PATH=/data/.ssh/id_ed25519 \
+    CONNVERSED_USERS_PATH=/data/.ssh/connversed_users
 VOLUME /data/.ssh
 EXPOSE 23234
 

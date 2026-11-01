@@ -21,6 +21,14 @@ const (
 
 type Message struct{}
 
+// MaxHistory is how many lines a session keeps; older ones scroll away for good.
+const MaxHistory = 500
+
+// MessageLimiter decides whether a user may send another message right now.
+type MessageLimiter interface {
+	Allow(username string) bool
+}
+
 type Model struct {
 	Width        int
 	Height       int
@@ -28,6 +36,8 @@ type Model struct {
 	UserInput    string
 	Messages     []string
 	Session      ssh.Session
+	Username     string
+	Limiter      MessageLimiter
 	Renderer     *lipgloss.Renderer
 	Color        string
 	Style        lipgloss.Style
@@ -39,7 +49,9 @@ type Model struct {
 	Incoming     <-chan ChatMessage
 }
 
-func InitialModel(s ssh.Session, lobby *Lobby) Model {
+// InitialModel builds the TUI for one SSH session. username must already be
+// validated: it is printed in other users' terminals as is.
+func InitialModel(s ssh.Session, username string, lobby *Lobby, limiter MessageLimiter) Model {
 	renderer := bubbletea.MakeRenderer(s)
 	incoming, color := lobby.Join()
 	go func() {
@@ -51,7 +63,7 @@ func InitialModel(s ssh.Session, lobby *Lobby) Model {
 	ti.Placeholder = "Type a message..."
 	ti.Prompt = ""
 	ti.Focus()
-	ti.CharLimit = 256
+	ti.CharLimit = MaxMessageLength
 	ti.Width = 50
 
 	return Model{
@@ -59,6 +71,8 @@ func InitialModel(s ssh.Session, lobby *Lobby) Model {
 		Renderer:     renderer,
 		Color:        color,
 		Session:      s,
+		Username:     username,
+		Limiter:      limiter,
 		Style:        renderer.NewStyle().Foreground(lipgloss.Color("8")),
 		ErrStyle:     renderer.NewStyle().Foreground(lipgloss.Color("3")),
 		TextInput:    ti,
@@ -82,8 +96,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case ChatMessage:
 		name := m.Renderer.NewStyle().Bold(true).Foreground(lipgloss.Color(msg.Color)).Render(msg.Username)
-		m.Messages = append(m.Messages, fmt.Sprintf("%s: %s", name, msg.Text))
-		m.Viewport.GotoBottom()
+		m.addLine(fmt.Sprintf("%s: %s", name, msg.Text))
 		return m, waitForMessage(m.Incoming)
 
 	case tea.KeyMsg:
@@ -94,14 +107,22 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.CurrentFocus == InputFocus {
 			switch msg.String() {
 			case "enter":
-				if m.TextInput.Value() != "" {
-					m.Lobby.Broadcast(ChatMessage{
-						Username: m.Session.User(),
-						Color:    m.Color,
-						Text:     m.TextInput.Value(),
-					})
+				text := SanitizeMessage(m.TextInput.Value())
+				if text == "" {
 					m.TextInput.Reset()
+					return m, nil
 				}
+				if m.Limiter != nil && !m.Limiter.Allow(m.Username) {
+					// Keep the text so it can be sent once the limit passes.
+					m.addLine(m.ErrStyle.Render("You are sending messages too fast. Wait a moment and press enter again."))
+					return m, nil
+				}
+				m.Lobby.Broadcast(ChatMessage{
+					Username: m.Username,
+					Color:    m.Color,
+					Text:     text,
+				})
+				m.TextInput.Reset()
 				return m, nil
 			case "esc":
 				m.CurrentFocus = MessagesFocus
@@ -147,6 +168,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	return m, tea.Batch(cmds...)
+}
+
+// addLine appends a line to the chat, dropping the oldest past MaxHistory.
+func (m *Model) addLine(line string) {
+	m.Messages = append(m.Messages, line)
+	if extra := len(m.Messages) - MaxHistory; extra > 0 {
+		m.Messages = append([]string(nil), m.Messages[extra:]...)
+	}
+	m.Viewport.GotoBottom()
 }
 
 func waitForMessage(messages <-chan ChatMessage) tea.Cmd {

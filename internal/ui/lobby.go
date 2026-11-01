@@ -9,6 +9,10 @@ type ChatMessage struct {
 	Text  string
 }
 
+// subscriberBuffer is how many messages can wait for a user whose screen has
+// not caught up yet. Past that, messages to that user are dropped.
+const subscriberBuffer = 64
+
 type subscriber struct {
 	messages chan<- ChatMessage
 	color    string
@@ -27,7 +31,7 @@ func NewLobby() *Lobby {
 // receives messages on and the color they are shown with, which is not shared
 // with anyone else connected unless every color is already taken.
 func (l *Lobby) Join() (<-chan ChatMessage, string) {
-	messages := make(chan ChatMessage, 16)
+	messages := make(chan ChatMessage, subscriberBuffer)
 
 	l.mu.Lock()
 	color := randomUserColor(l.colorsInUse())
@@ -43,7 +47,17 @@ func (l *Lobby) Leave(messages <-chan ChatMessage) {
 	l.mu.Unlock()
 }
 
+// Broadcast sends message to everyone in the lobby. The text is sanitized
+// here, so nothing reaches another user's terminal unfiltered, and empty
+// messages are dropped. Broadcast never blocks: a user who is not reading (for
+// example a client that stopped reading from its connection) misses messages
+// instead of freezing the chat for everybody else.
 func (l *Lobby) Broadcast(message ChatMessage) {
+	message.Text = SanitizeMessage(message.Text)
+	if message.Text == "" {
+		return
+	}
+
 	l.mu.RLock()
 	subscribers := make([]chan<- ChatMessage, 0, len(l.subscribers))
 	for _, s := range l.subscribers {
@@ -52,7 +66,10 @@ func (l *Lobby) Broadcast(message ChatMessage) {
 	l.mu.RUnlock()
 
 	for _, messages := range subscribers {
-		messages <- message
+		select {
+		case messages <- message:
+		default:
+		}
 	}
 }
 

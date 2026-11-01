@@ -16,7 +16,7 @@ The codebase follows a modular structure with three main executables and a clear
 
 2. **`cmd/client/main.go`** - Basic TCP client that connects to the server. Uses separate goroutines for reading from and writing to the connection.
 
-3. **`cmd/client-wish/main.go`** - SSH-based client built with Charm's Wish/Bubbletea libraries. Runs an SSH server (default `localhost:23234`; override with `CONNVERSED_HOST`, `CONNVERSED_PORT` and `CONNVERSED_HOST_KEY_PATH`) with a TUI. It currently offers a single shared lobby; it does not yet connect to the TCP server. Rooms are the next feature.
+3. **`cmd/client-wish/main.go`** - SSH-based client built with Charm's Wish/Bubbletea libraries. Thin entry point: reads `CONNVERSED_HOST`, `CONNVERSED_PORT`, `CONNVERSED_HOST_KEY_PATH` and `CONNVERSED_USERS_PATH` (default `localhost:23234`, `.ssh/id_ed25519`, `.ssh/connversed_users`) and starts the SSH server from `internal/server`. It currently offers a single shared lobby; it does not yet connect to the TCP server. Rooms are the next feature.
 
 ### Internal Packages (`internal/`)
 
@@ -41,6 +41,20 @@ The chat logic is centralized in this package with the following key components:
 
 - **`Message`** - Message data structure (stored but not yet fully utilized)
 
+#### SSH Server (`internal/server/`)
+
+- **`server.go`** - Builds the Wish SSH server. Public key auth only: a username belongs to the first key that uses it (`internal/identity`). When auth fails, a keyboard-interactive handler shows the client why (no key, name owned by another key, invalid name) and never admits anyone. Connection caps are enforced in `ConnCallback`, before the handshake; there is an idle timeout. `server_test.go` holds end-to-end tests that dial a real server.
+
+#### Identity (`internal/identity/`)
+
+- **`username.go`** - Usernames are lowercased and must match `[a-z0-9][a-z0-9_-]*`, max 20 chars, so they can never carry terminal escape sequences.
+- **`registry.go`** - Username to public key bindings, persisted in an authorized_keys-like file (`<name> <key>` per line, mode 600, written atomically). Caps: 3 names per key, 10000 in total.
+
+#### Limits (`internal/limits/`)
+
+- **`rate.go`** - Per-username token bucket for messages (burst 5, 1/s by default).
+- **`conn.go`** - Concurrent connection caps, total (200) and per remote IP (5).
+
 #### Transport Layer (`internal/transport/tcp/`)
 
 - **`handler.go`** - Connection handler that creates a `Client` from the TCP connection, adds it to the lobby, and loops reading messages and processing them as commands.
@@ -48,7 +62,8 @@ The chat logic is centralized in this package with the following key components:
 #### UI Layer (`internal/ui/`)
 
 - **`model.go`** - Bubbletea model implementing the TUI for the wish client. Manages focus (input vs messages) and user input. There is no welcome screen: sessions start in the lobby.
-- **`lobby.go`** - In-memory shared lobby that broadcasts messages and hands each connected user a color that is not in use by anyone else (random from `colors.go`).
+- **`lobby.go`** - In-memory shared lobby that broadcasts messages and hands each connected user a color that is not in use by anyone else (random from `colors.go`). `Broadcast` sanitizes text and never blocks: a user whose buffer is full misses messages instead of stalling everyone.
+- **`sanitize.go`** - Strips control characters (so no ANSI escapes), bidi overrides and newlines from messages, and caps them at 256 characters. Everything printed into another user's terminal must go through it or be a validated username.
 - **`views.go`** - `LobbyView`, which only advertises features that exist today.
 
 ### Data Flow
@@ -118,4 +133,4 @@ go build -o bin/client-wish cmd/client-wish/main.go
 - Default username is "anonymous" until changed
 - Rooms are automatically created on first `/join` and deleted when empty
 - The Wish client (client-wish) is incomplete - only the lobby is implemented (rooms come next)
-- `Dockerfile` builds `cmd/client-wish` into a small image for Coolify. Expose TCP port 23234 and persist `/data/.ssh` so the SSH host key survives redeploys
+- `Dockerfile` builds `cmd/client-wish` into a small image for Coolify. Expose TCP port 23234 and persist `/data/.ssh` so the SSH host key and the username registry survive redeploys
