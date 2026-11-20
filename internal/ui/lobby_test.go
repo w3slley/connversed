@@ -101,3 +101,32 @@ func TestJoinReplaysLatestHistory(t *testing.T) {
 		t.Fatalf("first replayed message = %q, want m20", first.Text)
 	}
 }
+
+func TestQuitLeavesLobbyAndTellsOthers(t *testing.T) {
+	lobby := NewLobby()
+	alice, _ := lobby.Join("alice")
+	bobCh, bobColor := lobby.Join("bob")
+	<-alice // bob joined
+
+	m := Model{Lobby: lobby, Incoming: bobCh, Username: "bob", Color: bobColor}
+	m.quit()
+
+	select {
+	case n := <-alice:
+		if !n.Notice || n.Username != "bob" || n.Text != "left the lobby" {
+			t.Fatalf("unexpected notice: %+v", n)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("alice was not told bob left")
+	}
+	if users := lobby.Users(); len(users) != 1 || users[0].Name != "alice" {
+		t.Fatalf("users = %v, want only alice", users)
+	}
+	// The connection closing afterwards must not announce it twice.
+	lobby.Leave(bobCh)
+	select {
+	case n := <-alice:
+		t.Fatalf("second notice: %+v", n)
+	default:
+	}
+}

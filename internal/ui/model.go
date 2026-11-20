@@ -106,7 +106,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyMsg:
 		if msg.String() == "ctrl+c" {
-			return m, tea.Quit
+			return m, m.quit()
 		}
 
 		if m.CurrentFocus == InputFocus {
@@ -140,7 +140,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else if m.CurrentFocus == MessagesFocus {
 			switch msg.String() {
 			case "q":
-				return m, tea.Quit
+				return m, m.quit()
 			case "esc", "i":
 				m.CurrentFocus = InputFocus
 				m.TextInput.Focus()
@@ -182,6 +182,14 @@ func (m *Model) addLine(line string) {
 		m.Messages = append([]string(nil), m.Messages[extra:]...)
 	}
 	m.Viewport.GotoBottom()
+}
+
+// quit leaves the lobby right away, so the others see it as soon as the user
+// quits instead of when the SSH connection finally closes. Leave is safe to
+// call twice.
+func (m Model) quit() tea.Cmd {
+	m.Lobby.Leave(m.Incoming)
+	return tea.Quit
 }
 
 func waitForMessage(messages <-chan ChatMessage) tea.Cmd {
