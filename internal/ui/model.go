@@ -53,7 +53,7 @@ type Model struct {
 // validated: it is printed in other users' terminals as is.
 func InitialModel(s ssh.Session, username string, lobby *Lobby, limiter MessageLimiter) Model {
 	renderer := bubbletea.MakeRenderer(s)
-	incoming, color := lobby.Join()
+	incoming, color := lobby.Join(username)
 	go func() {
 		<-s.Context().Done()
 		lobby.Leave(incoming)
@@ -95,6 +95,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case ChatMessage:
+		if msg.Notice {
+			name := m.Renderer.NewStyle().Bold(true).Foreground(lipgloss.Color(msg.Color)).Render(msg.Username)
+			m.addLine(m.Style.Render("→ ") + name + m.Style.Render(" "+msg.Text))
+			return m, waitForMessage(m.Incoming)
+		}
 		name := m.Renderer.NewStyle().Bold(true).Foreground(lipgloss.Color(msg.Color)).Render(msg.Username)
 		m.addLine(fmt.Sprintf("%s: %s", name, msg.Text))
 		return m, waitForMessage(m.Incoming)

@@ -40,7 +40,7 @@ func TestSanitizeMessageCapsLength(t *testing.T) {
 
 func TestBroadcastSanitizesText(t *testing.T) {
 	lobby := NewLobby()
-	ch, _ := lobby.Join()
+	ch, _ := lobby.Join("")
 	lobby.Broadcast(ChatMessage{Username: "eve", Text: "\x1b[2Jgotcha"})
 	if got := (<-ch).Text; strings.ContainsRune(got, '\x1b') {
 		t.Fatalf("escape reached a subscriber: %q", got)
@@ -49,7 +49,7 @@ func TestBroadcastSanitizesText(t *testing.T) {
 
 func TestBroadcastDropsEmptyMessages(t *testing.T) {
 	lobby := NewLobby()
-	ch, _ := lobby.Join()
+	ch, _ := lobby.Join("")
 	lobby.Broadcast(ChatMessage{Username: "eve", Text: "\x1b\x07  "})
 	select {
 	case m := <-ch:
@@ -60,8 +60,8 @@ func TestBroadcastDropsEmptyMessages(t *testing.T) {
 
 func TestBroadcastDoesNotBlockOnUserWhoIsNotReading(t *testing.T) {
 	lobby := NewLobby()
-	stalled, _ := lobby.Join() // never read from
-	active, _ := lobby.Join()
+	stalled, _ := lobby.Join("") // never read from
+	active, _ := lobby.Join("")
 
 	done := make(chan struct{})
 	go func() {
@@ -88,7 +88,7 @@ func (denyAll) Allow(string) bool { return false }
 
 func TestRateLimitedMessageIsKeptAndNotSent(t *testing.T) {
 	lobby := NewLobby()
-	other, _ := lobby.Join()
+	other, _ := lobby.Join("")
 	input := textinput.New()
 	input.Focus()
 	input.SetValue("hello")

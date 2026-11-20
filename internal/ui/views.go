@@ -2,6 +2,7 @@ package ui
 
 import (
 	"connverse/internal/chat"
+	"fmt"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
@@ -98,10 +99,22 @@ func LobbyView(m Model) string {
 		messagesContent = strings.Join(m.Messages, "\n")
 	}
 
+	// Online users panel in the upper right corner. On a narrow terminal it is
+	// left out so the chat keeps its width.
+	panel := ""
+	if m.Lobby != nil && m.Width >= minWidthForUsers {
+		panel = usersPanel(m, availableHeight)
+		messagesBoxStyle = messagesBoxStyle.Width(m.Width - 4 - lipgloss.Width(panel))
+		m.Viewport.Width = messagesBoxStyle.GetWidth() - messagesBoxStyle.GetHorizontalPadding()
+	}
+
 	// Set viewport content
 	m.Viewport.Height = availableHeight
 	m.Viewport.SetContent(messagesContent)
 	messagesBox := messagesBoxStyle.Height(availableHeight).Render(m.Viewport.View())
+	if panel != "" {
+		messagesBox = lipgloss.JoinHorizontal(lipgloss.Top, messagesBox, panel)
+	}
 
 	// Combine all elements
 	return lipgloss.JoinVertical(
@@ -111,4 +124,38 @@ func LobbyView(m Model) string {
 		inputBox,
 		commandBar,
 	)
+}
+
+const (
+	minWidthForUsers = 70
+	usersPanelWidth  = 22 // content width, padding included; names are at most 20 characters
+)
+
+// usersPanel renders who is online, one name per line in their chat color,
+// as tall as the messages box next to it.
+func usersPanel(m Model, availableHeight int) string {
+	style := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("62")).
+		Padding(1).
+		Width(usersPanelWidth).
+		Height(availableHeight + 2)
+
+	nameStyle := lipgloss.NewStyle()
+	if m.Renderer != nil {
+		nameStyle = m.Renderer.NewStyle()
+	}
+
+	users := m.Lobby.Users()
+	lines := []string{lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("62")).Render(fmt.Sprintf("Online (%d)", len(users)))}
+	room := availableHeight - 1
+	for i, u := range users {
+		if i >= room {
+			more := len(users) - i
+			lines = append(lines[:len(lines)-1], lipgloss.NewStyle().Foreground(lipgloss.Color("8")).Render(fmt.Sprintf("+%d more", more+1)))
+			break
+		}
+		lines = append(lines, nameStyle.Foreground(lipgloss.Color(u.Color)).Render(u.Name))
+	}
+	return style.Render(strings.Join(lines, "\n"))
 }
